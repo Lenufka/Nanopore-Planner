@@ -26,7 +26,7 @@ sheet, worksheet_main, worksheet_planned = connect_to_gsheet()
 data = worksheet_main.get_all_records()
 df = pd.DataFrame(data)
 
-st.subheader("📋 Seznam vzorků")
+st.subheader("Seznam vzorků")
 
 # Filtrování podle projektu
 projekty = df["NAME/PROJECT"].unique().tolist()
