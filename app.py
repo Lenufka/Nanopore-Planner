@@ -25,11 +25,11 @@ df = pd.DataFrame(data)
 st.subheader("Seznam vzorků")
 
 # Filtrování podle projektu
-projekty = df["Project"].unique().tolist()
+projekty = df["NAME/PROJECT"].unique().tolist()
 vybrany_projekt = st.selectbox("Vyber projekt", ["Vše"] + projekty)
 
 if vybrany_projekt != "Vše":
-    df = df[df["Project"] == vybrany_projekt]
+    df = df[df["NAME/PROJECT"] == vybrany_projekt]
 
 st.dataframe(df, use_container_width=True)
 
@@ -43,13 +43,13 @@ needed_flowcells = (len(df) + samples_per_flowcell - 1) // samples_per_flowcell
 st.write(f"Odhadovaný počet flowcells: **{needed_flowcells}**")
 
 # Graf: počet vzorků podle projektu
-if "Project" in df.columns:
-    fig = px.histogram(df, x="Project", title="Počet vzorků podle projektu")
+if "NAME/PROJECT" in df.columns:
+    fig = px.histogram(df, x="NAME/PROJECT", title="Počet vzorků podle projektu")
     st.plotly_chart(fig, use_container_width=True)
 
 # Graf: počet vzorků podle typu
-if "Sample type" in df.columns:
-    fig2 = px.histogram(df, x="Sample type", title="Počet vzorků podle typu vzorku")
+if "TYPE" in df.columns:
+    fig2 = px.histogram(df, x="TYPE", title="Počet vzorků podle typu vzorku")
     st.plotly_chart(fig2, use_container_width=True)
 
 # Místo pro plánování nového runu
@@ -64,7 +64,8 @@ if len(selected_samples) > max_samples:
     selected_samples = selected_samples[:max_samples]
 
 if selected_samples:
-    run_df = df[df["ID"].isin(selected_samples)][["ID", "Responsible", "Project"]]
+    run_df = df[df["ID"].isin(selected_samples)][["ID", "NAME/PROJECT"]]
+    run_df = run_df.rename(columns={"NAME/PROJECT": "Responsible/Project"})
     st.write("### Vybrané vzorky:")
     st.dataframe(run_df, use_container_width=True)
 
