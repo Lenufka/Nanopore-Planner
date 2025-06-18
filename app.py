@@ -2,7 +2,7 @@ import streamlit as st
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-st.title("🧬 Nanopore Planner")
+st.title("Nanopore Planner")
 
 # Připojení ke Google Sheet
 @st.cache_resource
@@ -16,16 +16,16 @@ def connect_to_gsheet():
 sheet = connect_to_gsheet()
 data = sheet.get_all_records()
 
-st.subheader("📄 Seznam vzorků")
+st.subheader("Seznam vzorků")
 st.dataframe(data)
 
 st.markdown("---")
 
 # Spočítej vzorky
 num_samples = len(data)
-st.write(f"🔢 Celkový počet vzorků: **{num_samples}**")
+st.write(f"Celkový počet vzorků: **{num_samples}**")
 
 # Odhad flowcell (např. 24 vzorků/run)
 samples_per_flowcell = 24
 needed_flowcells = (num_samples + samples_per_flowcell - 1) // samples_per_flowcell
-st.write(f"🧪 Odhadovaný počet flowcells: **{needed_flowcells}**")
+st.write(f"Odhadovaný počet flowcells: **{needed_flowcells}**")
