@@ -39,7 +39,7 @@ st.dataframe(df, use_container_width=True)
 
 # Statistika vzorků
 st.markdown("---")
-st.subheader("📊 Statistiky dle projektu")
+st.subheader("Statistiky dle projektu")
 
 numeric_cols = [
     "NREAD-QCHECK(MIN 10Q, 1000bp, NO LAMBDA)",
@@ -70,11 +70,11 @@ st.dataframe(project_summary, use_container_width=True)
 
 # Export možnosti
 st.markdown("---")
-st.subheader("📤 Export dat")
+st.subheader("Export dat")
 
 csv = df.to_csv(index=False).encode('utf-8')
 st.download_button(
-    label="📥 Stáhnout aktuální tabulku (CSV)",
+    label="Stáhnout aktuální tabulku (CSV)",
     data=csv,
     file_name='nanopore_data.csv',
     mime='text/csv'
@@ -82,7 +82,7 @@ st.download_button(
 
 # Plánování runů
 st.markdown("---")
-st.subheader("🧪 Plánování nových runů")
+st.subheader("Plánování nových runů")
 
 max_samples = 24
 selected_samples = st.multiselect("Vyber vzorky pro nový run (max 24)", df["ID"].tolist())
@@ -99,7 +99,7 @@ if selected_samples:
     ]]
     st.dataframe(run_df, use_container_width=True)
 
-    if st.button("✅ Potvrdit a uložit run"):
+    if st.button("Potvrdit a uložit run"):
         try:
             existing_data = worksheet_planned.get_all_records()
             run_number = 50 + len(existing_data) // max_samples
