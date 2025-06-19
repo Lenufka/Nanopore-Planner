@@ -115,5 +115,5 @@ else:
     )
 
 st.markdown("---")
-st.subheader("📦 Assigned Samples in Runs")
+st.subheader("Assigned Samples in Runs")
 st.dataframe(df_samples, use_container_width=True)
