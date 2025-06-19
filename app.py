@@ -4,6 +4,7 @@ import gspread
 import plotly.express as px
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
+from io import BytesIO
 
 st.set_page_config(page_title="Nanopore Planner", layout="wide")
 st.title("Nanopore Run Planner")
@@ -30,7 +31,7 @@ st.subheader("Sample List")
 
 # Filter by project
 projects = df["NAME/PROJECT"].dropna().unique().tolist()
-selected_project = st.selectbox("Select project", ["All"] + projects)
+selected_project = st.selectbox("Select a project", ["All"] + projects)
 
 if selected_project != "All":
     df = df[df["NAME/PROJECT"] == selected_project]
@@ -73,7 +74,7 @@ st.markdown("---")
 st.subheader("Plan a New Run")
 
 max_samples = 24
-selected_samples = st.multiselect("Select up to 24 samples to plan a run", df["ID"].dropna().tolist())
+selected_samples = st.multiselect("Select up to 24 samples to plan a new run", df["ID"].dropna().tolist())
 
 if len(selected_samples) > max_samples:
     st.warning(f"Too many samples selected! Max is {max_samples}.")
@@ -112,9 +113,16 @@ st.download_button(
     mime="text/csv"
 )
 
+# Export Excel with BytesIO
+excel_buffer = BytesIO()
+df_planned.to_excel(excel_buffer, index=False, engine='openpyxl')
 st.download_button(
     label="Download as Excel",
-    data=df_planned.to_excel(index=False, engine='openpyxl'),
+    data=excel_buffer.getvalue(),
     file_name="planned_runs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
+st.markdown("---")
+st.subheader("Live Google Sheet Integration")
+st.markdown("Planned runs added to the shared Google Sheet will appear here automatically on page refresh.")
