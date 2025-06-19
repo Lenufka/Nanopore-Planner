@@ -6,7 +6,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 
 st.set_page_config(page_title="Nanopore Run Planner", layout="wide")
-st.title("🧬 Nanopore Run Planner")
+st.title("Nanopore Run Planner")
 
 @st.cache_resource
 def connect_to_gsheet():
@@ -26,7 +26,7 @@ df_main = pd.DataFrame(ws_main.get_all_records())
 df_planned = pd.DataFrame(ws_planned.get_all_records())
 df_samples = pd.DataFrame(ws_samples.get_all_records())
 
-st.subheader("📋 Sample Overview")
+st.subheader("Sample Overview")
 projects = df_main["NAME/PROJECT"].dropna().unique().tolist()
 selected_project = st.selectbox("Filter by project", ["All"] + projects)
 if selected_project != "All":
@@ -44,7 +44,7 @@ for col in numeric_cols:
         df_main[col] = pd.to_numeric(df_main[col], errors="coerce")
 
 st.markdown("---")
-st.subheader("📊 Project Statistics")
+st.subheader("Project Statistics")
 summary = df_main.groupby("NAME/PROJECT").agg({
     "NREAD-QCHECK(MIN 10Q, 1000bp, NO LAMBDA)": "sum",
     "TOTAL_len_bp": "sum",
@@ -66,7 +66,7 @@ summary = df_main.groupby("NAME/PROJECT").agg({
 st.dataframe(summary, use_container_width=True)
 
 st.markdown("---")
-st.subheader("🧪 Plan New Run")
+st.subheader("Plan New Run")
 
 max_samples = 24
 selected_samples = st.multiselect("Select up to 24 samples to include in new run", df_main["ID"].dropna().tolist())
@@ -96,7 +96,7 @@ else:
     st.info("Please select samples to create a planned run.")
 
 st.markdown("---")
-st.subheader("📁 Export Data")
+st.subheader("Export Data")
 
 csv_export = st.radio("Choose format to download planned runs:", ["CSV", "Excel"])
 if csv_export == "CSV":
