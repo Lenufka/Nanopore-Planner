@@ -1,51 +1,50 @@
 import streamlit as st
 import pandas as pd
 import gspread
+import plotly.express as px
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import io
-from io import BytesIO
 
-st.set_page_config(page_title="Nanopore Run Planner", layout="wide")
+st.set_page_config(page_title="Nanopore Planner", layout="wide")
 st.title("🧬 Nanopore Run Planner")
 
-# Connect to Google Sheets
 @st.cache_resource
-
 def connect_to_gsheet():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gspread_service_account"], scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(
+        st.secrets["gspread_service_account"], scope)
     client = gspread.authorize(creds)
     sheet = client.open("Nanopore Planner")
     ws_samples = sheet.worksheet("NEW_single_barcode_sample_count")
     ws_planned = sheet.worksheet("PLANNED_RUNS")
     ws_in_run = sheet.worksheet("SAMPLES_IN_RUN")
     ws_flowcells = sheet.worksheet("FLOWCELL_CALC")
-    return ws_samples, ws_planned, ws_in_run, ws_flowcells
+    return sheet, ws_samples, ws_planned, ws_in_run, ws_flowcells
 
-try:
-    ws_samples, ws_planned, ws_in_run, ws_flowcells = connect_to_gsheet()
-    df_samples = pd.DataFrame(ws_samples.get_all_records())
-    df_planned = pd.DataFrame(ws_planned.get_all_records())
-    df_in_run = pd.DataFrame(ws_in_run.get_all_records())
-    df_flowcells = pd.DataFrame(ws_flowcells.get_all_records())
-except Exception as e:
-    st.error(f"Error loading Google Sheets: {e}")
-    st.stop()
+def safe_get_records(worksheet):
+    try:
+        data = worksheet.get_all_records()
+        return pd.DataFrame(data)
+    except Exception as e:
+        st.warning(f"Could not load worksheet: {worksheet.title} – {e}")
+        return pd.DataFrame()
+
+sheet, ws_samples, ws_planned, ws_in_run, ws_flowcells = connect_to_gsheet()
+
+df_samples = safe_get_records(ws_samples)
+df_planned = safe_get_records(ws_planned)
+df_in_run = safe_get_records(ws_in_run)
+df_flowcells = safe_get_records(ws_flowcells)
 
 st.header("📋 Sample Overview")
-if "NAME/PROJECT" in df_samples.columns:
-    projects = df_samples["NAME/PROJECT"].dropna().unique().tolist()
-    selected_project = st.selectbox("Filter by project", ["All"] + projects)
-    if selected_project != "All":
-        df_samples = df_samples[df_samples["NAME/PROJECT"] == selected_project]
-    st.dataframe(df_samples, use_container_width=True)
-else:
-    st.warning("Missing 'NAME/PROJECT' column in sample data.")
+projects = df_samples["NAME/PROJECT"].dropna().unique().tolist() if not df_samples.empty else []
+selected_project = st.selectbox("Filter by project", ["All"] + projects)
+if selected_project != "All" and not df_samples.empty:
+    df_samples = df_samples[df_samples["NAME/PROJECT"] == selected_project]
+st.dataframe(df_samples, use_container_width=True)
 
-st.markdown("---")
-
-st.header("📈 Project Statistics")
+# Convert numeric columns
 numeric_cols = [
     "NREAD-QCHECK(MIN 10Q, 1000bp, NO LAMBDA)", "TOTAL_len_bp", "N50",
     "AVEG.LEN", "MAX LEN (bp)", "Q20%", "Q30%"]
@@ -53,7 +52,9 @@ for col in numeric_cols:
     if col in df_samples.columns:
         df_samples[col] = pd.to_numeric(df_samples[col], errors="coerce")
 
-if "NAME/PROJECT" in df_samples.columns:
+st.markdown("---")
+st.header("📈 Project Statistics")
+if not df_samples.empty:
     summary = df_samples.groupby("NAME/PROJECT").agg({
         "NREAD-QCHECK(MIN 10Q, 1000bp, NO LAMBDA)": "sum",
         "TOTAL_len_bp": "sum",
@@ -72,19 +73,26 @@ if "NAME/PROJECT" in df_samples.columns:
         "ID": "Sample Count"
     }).reset_index()
     st.dataframe(summary, use_container_width=True)
-else:
-    st.warning("Project statistics cannot be calculated due to missing column.")
+
+    if "Date" in df_samples.columns:
+        df_samples["Date"] = pd.to_datetime(df_samples["Date"], errors="coerce")
+        df_samples = df_samples.dropna(subset=["Date"])
+        yearly_stats = df_samples.groupby(df_samples["Date"].dt.to_period("M")).agg({
+            "NREAD-QCHECK(MIN 10Q, 1000bp, NO LAMBDA)": "sum"
+        }).rename(columns={"NREAD-QCHECK(MIN 10Q, 1000bp, NO LAMBDA)": "Monthly Reads"}).reset_index()
+        yearly_stats["Date"] = yearly_stats["Date"].astype(str)
+
+        fig = px.line(yearly_stats, x="Date", y="Monthly Reads", title="Reads per Month")
+        st.plotly_chart(fig, use_container_width=True)
 
 st.markdown("---")
-
 st.header("🧪 Plan a New Run")
 max_samples = 24
-if "ID" in df_samples.columns:
+if not df_samples.empty:
     selected_samples = st.multiselect("Select up to 24 samples", df_samples["ID"].dropna().tolist())
     if len(selected_samples) > max_samples:
         st.warning(f"Too many samples selected! Max is {max_samples}.")
         selected_samples = selected_samples[:max_samples]
-
     if selected_samples:
         run_df = df_samples[df_samples["ID"].isin(selected_samples)][[
             "ID", "BARCODE", "TYPE", "NAME/PROJECT",
@@ -102,37 +110,28 @@ if "ID" in df_samples.columns:
                 st.error(f"Error saving run: {e}")
     else:
         st.info("Please select samples to plan a run.")
-else:
-    st.warning("No column 'ID' found in samples.")
 
 st.markdown("---")
+st.header("📤 Export Data")
+buffer_xlsx = io.BytesIO()
+df_planned.to_excel(buffer_xlsx, index=False, engine='openpyxl')
+buffer_xlsx.seek(0)
+st.download_button(
+    label="Download Planned Runs (.xlsx)",
+    data=buffer_xlsx,
+    file_name="planned_runs.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
 
-st.header("📥 Export Data")
-
-def to_excel_download(df, filename):
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False)
-    st.download_button(
-        label=f"Download {filename}",
-        data=output.getvalue(),
-        file_name=filename,
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-if not df_planned.empty:
-    to_excel_download(df_planned, "planned_runs.xlsx")
-if not df_in_run.empty:
-    st.download_button(
-        label="Download Samples in Run (.csv)",
-        data=df_in_run.to_csv(index=False).encode("utf-8"),
-        file_name="samples_in_run.csv",
-        mime="text/csv"
-    )
+st.download_button(
+    label="Download Samples in Run (.csv)",
+    data=df_in_run.to_csv(index=False).encode("utf-8"),
+    file_name="samples_in_run.csv",
+    mime="text/csv"
+)
 
 st.markdown("---")
-
-st.header("📦 Flowcell Calculation")
+st.header("🔬 Flowcell Calculation")
 if df_flowcells.empty:
     st.info("Flowcell calculation table is currently empty.")
 else:
