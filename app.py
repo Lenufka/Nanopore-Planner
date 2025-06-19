@@ -24,6 +24,10 @@ def connect_to_gsheet():
 
 def safe_get_records(worksheet):
     try:
+        headers = worksheet.row_values(1)
+        if not all(headers):
+            st.warning(f"Worksheet '{worksheet.title}' has missing headers: {headers}")
+            return pd.DataFrame()
         data = worksheet.get_all_records()
         return pd.DataFrame(data)
     except Exception as e:
