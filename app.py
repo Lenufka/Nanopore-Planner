@@ -1,11 +1,12 @@
 import streamlit as st
 import pandas as pd
 import gspread
+import plotly.express as px
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import io
 
-st.set_page_config(page_title="Nanopore Run Planner", layout="wide")
+st.set_page_config(page_title="Nanopore Planner", layout="wide")
 st.title("🧬 Nanopore Run Planner")
 
 @st.cache_resource
@@ -19,24 +20,25 @@ def connect_to_gsheet():
     ws_planned = sheet.worksheet("PLANNED_RUNS")
     ws_in_run = sheet.worksheet("SAMPLES_IN_RUN")
     ws_flowcells = sheet.worksheet("FLOWCELL_CALC")
-    return ws_samples, ws_planned, ws_in_run, ws_flowcells
+    return sheet, ws_samples, ws_planned, ws_in_run, ws_flowcells
 
-ws_samples, ws_planned, ws_in_run, ws_flowcells = connect_to_gsheet()
+sheet, ws_samples, ws_planned, ws_in_run, ws_flowcells = connect_to_gsheet()
 
-# Load data
+# Load data from Google Sheets
 df_samples = pd.DataFrame(ws_samples.get_all_records())
 df_planned = pd.DataFrame(ws_planned.get_all_records())
 df_in_run = pd.DataFrame(ws_in_run.get_all_records())
 df_flowcells = pd.DataFrame(ws_flowcells.get_all_records())
 
+# Sample Overview
 st.header("📋 Sample Overview")
 projects = df_samples["NAME/PROJECT"].dropna().unique().tolist()
-selected_project = st.selectbox("Filter by project", ["All"] + projects)
+selected_project = st.selectbox("Filter by Project", ["All"] + projects)
 if selected_project != "All":
     df_samples = df_samples[df_samples["NAME/PROJECT"] == selected_project]
 st.dataframe(df_samples, use_container_width=True)
 
-# Convert numeric columns
+# Convert columns to numeric for statistics
 numeric_cols = [
     "NREAD-QCHECK(MIN 10Q, 1000bp, NO LAMBDA)", "TOTAL_len_bp", "N50",
     "AVEG.LEN", "MAX LEN (bp)", "Q20%", "Q30%"]
@@ -44,6 +46,7 @@ for col in numeric_cols:
     if col in df_samples.columns:
         df_samples[col] = pd.to_numeric(df_samples[col], errors="coerce")
 
+# Project Statistics
 st.markdown("---")
 st.header("📊 Project Statistics")
 summary = df_samples.groupby("NAME/PROJECT").agg({
@@ -65,14 +68,14 @@ summary = df_samples.groupby("NAME/PROJECT").agg({
 }).reset_index()
 st.dataframe(summary, use_container_width=True)
 
+# Plan a New Run
 st.markdown("---")
 st.header("🧪 Plan a New Run")
 max_samples = 24
 selected_samples = st.multiselect("Select up to 24 samples", df_samples["ID"].dropna().tolist())
 if len(selected_samples) > max_samples:
-    st.warning(f"Too many samples selected! Max is {max_samples}.")
+    st.warning(f"Too many samples selected! Maximum is {max_samples}.")
     selected_samples = selected_samples[:max_samples]
-
 if selected_samples:
     run_df = df_samples[df_samples["ID"].isin(selected_samples)][[
         "ID", "BARCODE", "TYPE", "NAME/PROJECT",
@@ -82,7 +85,7 @@ if selected_samples:
     run_name = f"RUN{next_run_num:03d}"
     run_df.insert(0, "RUN", run_name)
     st.dataframe(run_df, use_container_width=True)
-    if st.button("Confirm and Save Run"):
+    if st.button("✅ Confirm and Save Run"):
         try:
             ws_planned.append_rows(run_df.values.tolist(), value_input_option="USER_ENTERED")
             st.success(f"Run {run_name} successfully saved.")
@@ -91,14 +94,19 @@ if selected_samples:
 else:
     st.info("Please select samples to plan a run.")
 
+# Export Data
 st.markdown("---")
 st.header("⬇️ Export Data")
-# Export planned runs
+
+# Export planned runs to .xlsx
 buffer_xlsx = io.BytesIO()
-df_planned.to_excel(buffer_xlsx, index=False, engine='openpyxl')
+with pd.ExcelWriter(buffer_xlsx, engine='openpyxl') as writer:
+    df_planned.to_excel(writer, index=False, sheet_name="Planned Runs")
+buffer_xlsx.seek(0)
+
 st.download_button(
     label="Download Planned Runs (.xlsx)",
-    data=buffer_xlsx.getvalue(),
+    data=buffer_xlsx,
     file_name="planned_runs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
@@ -111,9 +119,10 @@ st.download_button(
     mime="text/csv"
 )
 
+# Flowcell Calculation
 st.markdown("---")
 st.header("📦 Flowcell Calculation")
-if not isinstance(df_flowcells, pd.DataFrame) or df_flowcells.empty or df_flowcells.shape[0] == 0:
+if df_flowcells.empty:
     st.info("Flowcell calculation table is currently empty.")
 else:
     st.dataframe(df_flowcells, use_container_width=True)
