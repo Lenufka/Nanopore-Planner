@@ -24,10 +24,6 @@ def connect_to_gsheet():
 
 def safe_get_records(worksheet):
     try:
-        headers = worksheet.row_values(1)
-        if not all(headers):
-            st.warning(f"Worksheet '{worksheet.title}' has missing headers: {headers}")
-            return pd.DataFrame()
         data = worksheet.get_all_records()
         return pd.DataFrame(data)
     except Exception as e:
@@ -117,15 +113,22 @@ if not df_samples.empty:
 
 st.markdown("---")
 st.header("📤 Export Data")
-buffer_xlsx = io.BytesIO()
-df_planned.to_excel(buffer_xlsx, index=False, engine='openpyxl')
-buffer_xlsx.seek(0)
-st.download_button(
-    label="Download Planned Runs (.xlsx)",
-    data=buffer_xlsx,
-    file_name="planned_runs.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
+if not df_planned.empty:
+    try:
+        buffer_xlsx = io.BytesIO()
+        with pd.ExcelWriter(buffer_xlsx, engine='openpyxl') as writer:
+            df_planned.to_excel(writer, index=False)
+        buffer_xlsx.seek(0)
+        st.download_button(
+            label="Download Planned Runs (.xlsx)",
+            data=buffer_xlsx,
+            file_name="planned_runs.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        st.error(f"Error generating Excel file: {e}")
+else:
+    st.info("No planned run data available to export.")
 
 st.download_button(
     label="Download Samples in Run (.csv)",
