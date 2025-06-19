@@ -29,16 +29,14 @@ df = pd.DataFrame(data)
 
 st.subheader("Sample List")
 
-# Filter by project
 projects = df["NAME/PROJECT"].dropna().unique().tolist()
-selected_project = st.selectbox("Select a project", ["All"] + projects)
+selected_project = st.selectbox("Filter by project", ["All"] + projects)
 
 if selected_project != "All":
     df = df[df["NAME/PROJECT"] == selected_project]
 
 st.dataframe(df, use_container_width=True)
 
-# Convert numeric columns safely
 numeric_cols = [
     "NREAD-QCHECK(MIN 10Q, 1000bp, NO LAMBDA)", "TOTAL_len_bp", "N50",
     "AVEG.LEN", "MAX LEN (bp)", "Q20%", "Q30%"
@@ -106,23 +104,59 @@ st.subheader("Export Planned Runs")
 planned_data = worksheet_planned.get_all_records()
 df_planned = pd.DataFrame(planned_data)
 
+csv_data = df_planned.to_csv(index=False).encode("utf-8")
+excel_buffer = BytesIO()
+df_planned.to_excel(excel_buffer, index=False, engine='openpyxl')
+excel_buffer.seek(0)
+
 st.download_button(
     label="Download as CSV",
-    data=df_planned.to_csv(index=False).encode("utf-8"),
+    data=csv_data,
     file_name="planned_runs.csv",
     mime="text/csv"
 )
 
-# Export Excel with BytesIO
-excel_buffer = BytesIO()
-df_planned.to_excel(excel_buffer, index=False, engine='openpyxl')
 st.download_button(
     label="Download as Excel",
-    data=excel_buffer.getvalue(),
+    data=excel_buffer,
     file_name="planned_runs.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
 
 st.markdown("---")
-st.subheader("Live Google Sheet Integration")
-st.markdown("Planned runs added to the shared Google Sheet will appear here automatically on page refresh.")
+st.subheader("Modify or Delete Runs")
+
+if not df_planned.empty:
+    selected_run = st.selectbox("Select run to modify or delete", df_planned["RUN"].unique().tolist())
+    editable_df = df_planned[df_planned["RUN"] == selected_run].copy()
+    edited_df = st.data_editor(editable_df, use_container_width=True, num_rows="dynamic")
+
+    if st.button("Update Selected Run"):
+        try:
+            all_data = worksheet_planned.get_all_values()
+            headers = all_data[0]
+            body = all_data[1:]
+            body_df = pd.DataFrame(body, columns=headers)
+            body_df = body_df[~(body_df["RUN"] == selected_run)]
+            worksheet_planned.clear()
+            worksheet_planned.append_row(headers)
+            worksheet_planned.append_rows(body_df.values.tolist() + edited_df.values.tolist())
+            st.success("Run successfully updated.")
+        except Exception as e:
+            st.error(f"Error updating run: {e}")
+
+    if st.button("Delete Selected Run"):
+        try:
+            all_data = worksheet_planned.get_all_values()
+            headers = all_data[0]
+            body = all_data[1:]
+            body_df = pd.DataFrame(body, columns=headers)
+            body_df = body_df[~(body_df["RUN"] == selected_run)]
+            worksheet_planned.clear()
+            worksheet_planned.append_row(headers)
+            worksheet_planned.append_rows(body_df.values.tolist())
+            st.success("Run successfully deleted.")
+        except Exception as e:
+            st.error(f"Error deleting run: {e}")
+
+st.info("ℹ️ Any changes made in the Google Sheet directly will appear here after refreshing the app.")
