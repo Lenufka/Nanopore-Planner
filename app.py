@@ -41,23 +41,23 @@ st.header("📋 Sample Overview")
 
 if not df_samples.empty and "Name/Project" in df_samples.columns:
     projects = df_samples["Name/Project"].dropna().unique().tolist()
-    selected_project = st.selectbox("Filter by Project", ["All"] + projects)
+    selected_project = st.selectbox("Filter by project", ["All"] + sorted(projects))
     if selected_project != "All":
         df_samples = df_samples[df_samples["Name/Project"] == selected_project]
 
-st.dataframe(df_samples, use_container_width=True)
+    st.dataframe(df_samples, use_container_width=True)
 
-# Convert numeric columns
-numeric_cols = [
-    "NREAD-QCHECK(MIN 10Q, 1000bp, NO LAMBDA)", "TOTAL_len_bp", "N50",
-    "AVEG.LEN", "MAX LEN (bp)", "Q20%", "Q30%"]
-for col in numeric_cols:
-    if col in df_samples.columns:
-        df_samples[col] = pd.to_numeric(df_samples[col], errors="coerce")
+    # Convert numeric columns
+    numeric_cols = [
+        "NREAD-QCHECK(MIN 10Q, 1000bp, NO LAMBDA)", "TOTAL_len_bp", "N50",
+        "AVEG.LEN", "MAX LEN (bp)", "Q20%", "Q30%"]
+    for col in numeric_cols:
+        if col in df_samples.columns:
+            df_samples[col] = pd.to_numeric(df_samples[col], errors="coerce")
 
-st.markdown("---")
-st.header("📈 Project Statistics")
-if not df_samples.empty and "Name/Project" in df_samples.columns:
+    st.markdown("---")
+    st.header("📈 Project Statistics")
+
     summary = df_samples.groupby("Name/Project").agg({
         "NREAD-QCHECK(MIN 10Q, 1000bp, NO LAMBDA)": "sum",
         "TOTAL_len_bp": "sum",
