@@ -38,16 +38,14 @@ df_in_run = safe_get_records(ws_in_run)
 df_flowcells = safe_get_records(ws_flowcells)
 
 st.header("📋 Sample Overview")
-
 if not df_samples.empty and "Name/Project" in df_samples.columns:
     projects = df_samples["Name/Project"].dropna().unique().tolist()
-    selected_project = st.selectbox("Filter by project", ["All"] + sorted(projects))
+    selected_project = st.selectbox("Filter by project", ["All"] + projects)
     if selected_project != "All":
         df_samples = df_samples[df_samples["Name/Project"] == selected_project]
-
     st.dataframe(df_samples, use_container_width=True)
 
-    # Convert numeric columns
+    # Convert numeric columns for statistics
     numeric_cols = [
         "NREAD-QCHECK(MIN 10Q, 1000bp, NO LAMBDA)", "TOTAL_len_bp", "N50",
         "AVEG.LEN", "MAX LEN (bp)", "Q20%", "Q30%"]
@@ -57,7 +55,6 @@ if not df_samples.empty and "Name/Project" in df_samples.columns:
 
     st.markdown("---")
     st.header("📈 Project Statistics")
-
     summary = df_samples.groupby("Name/Project").agg({
         "NREAD-QCHECK(MIN 10Q, 1000bp, NO LAMBDA)": "sum",
         "TOTAL_len_bp": "sum",
