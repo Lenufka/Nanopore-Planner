@@ -36,9 +36,9 @@ df_planned = safe_get_records(ws_planned)
 df_in_run = safe_get_records(ws_in_run)
 
 st.header("📋 Sample Overview")
-projects = df_samples["NAME/PROJECT"].dropna().unique().tolist() if not df_samples.empty else []
+projects = df_samples["NAME/PROJECT"].dropna().unique().tolist() if not df_samples.empty and "NAME/PROJECT" in df_samples.columns else []
 selected_project = st.selectbox("Filter by project", ["All"] + projects)
-if selected_project != "All" and not df_samples.empty:
+if selected_project != "All" and not df_samples.empty and "NAME/PROJECT" in df_samples.columns:
     df_samples = df_samples[df_samples["NAME/PROJECT"] == selected_project]
 st.dataframe(df_samples, use_container_width=True)
 
@@ -52,7 +52,7 @@ for col in numeric_cols:
 
 st.markdown("---")
 st.header("📈 Project Statistics")
-if not df_samples.empty:
+if not df_samples.empty and "NAME/PROJECT" in df_samples.columns:
     summary = df_samples.groupby("NAME/PROJECT").agg({
         "NREAD-QCHECK(MIN 10Q, 1000bp, NO LAMBDA)": "sum",
         "TOTAL_len_bp": "sum",
@@ -60,7 +60,7 @@ if not df_samples.empty:
         "AVEG.LEN": "mean",
         "Q20%": "mean",
         "Q30%": "mean",
-        "ID": "count"
+        "ID": "count" if "ID" in df_samples.columns else 'size'
     }).rename(columns={
         "NREAD-QCHECK(MIN 10Q, 1000bp, NO LAMBDA)": "Total Reads",
         "TOTAL_len_bp": "Total Length (bp)",
@@ -86,14 +86,14 @@ if not df_samples.empty:
 st.markdown("---")
 st.header("🧪 Plan a New Run")
 max_samples = 24
-if not df_in_run.empty:
-    available_ids = df_in_run["ID"].dropna().tolist()
+if not df_in_run.empty and "ID" in df_in_run.columns:
+    available_ids = df_in_run["ID"].dropna().astype(str).tolist()
     selected_samples = st.multiselect("Select up to 24 samples", available_ids)
     if len(selected_samples) > max_samples:
         st.warning(f"Too many samples selected! Max is {max_samples}.")
         selected_samples = selected_samples[:max_samples]
     if selected_samples:
-        run_df = df_in_run[df_in_run["ID"].isin(selected_samples)]
+        run_df = df_in_run[df_in_run["ID"].astype(str).isin(selected_samples)].copy()
         next_run_num = 50 + len(df_planned["RUN"].dropna().unique()) if "RUN" in df_planned.columns else 50
         run_name = f"RUN{next_run_num:03d}"
         run_df.insert(0, "RUN", run_name)
