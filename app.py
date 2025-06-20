@@ -19,26 +19,21 @@ def connect_to_gsheet():
     ws_samples = sheet.worksheet("NEW_single_barcode_sample_count")
     ws_planned = sheet.worksheet("PLANNED_RUNS")
     ws_in_run = sheet.worksheet("SAMPLES_IN_RUN")
-    ws_flowcells = sheet.worksheet("FLOWCELL_CALC")
-    return sheet, ws_samples, ws_planned, ws_in_run, ws_flowcells
+    return sheet, ws_samples, ws_planned, ws_in_run
 
 def safe_get_records(worksheet):
     try:
-        headers = worksheet.row_values(1)
-        if "" in headers or len(headers) != len(set(headers)):
-            raise ValueError(f"The header row in the worksheet contains duplicates or empty values: {headers}")
-        data = worksheet.get_all_records()
+        data = worksheet.get_all_records(empty2zero=False, head=1)
         return pd.DataFrame(data)
     except Exception as e:
         st.warning(f"Could not load worksheet: {worksheet.title} – {e}")
         return pd.DataFrame()
 
-sheet, ws_samples, ws_planned, ws_in_run, ws_flowcells = connect_to_gsheet()
+sheet, ws_samples, ws_planned, ws_in_run = connect_to_gsheet()
 
 df_samples = safe_get_records(ws_samples)
 df_planned = safe_get_records(ws_planned)
 df_in_run = safe_get_records(ws_in_run)
-df_flowcells = safe_get_records(ws_flowcells)
 
 st.header("📋 Sample Overview")
 projects = df_samples["NAME/PROJECT"].dropna().unique().tolist() if not df_samples.empty else []
@@ -91,28 +86,33 @@ if not df_samples.empty:
 st.markdown("---")
 st.header("🧪 Plan a New Run")
 max_samples = 24
-if not df_samples.empty:
-    selected_samples = st.multiselect("Select up to 24 samples", df_samples["ID"].dropna().tolist())
+if not df_in_run.empty:
+    available_ids = df_in_run["ID"].dropna().tolist()
+    selected_samples = st.multiselect("Select up to 24 samples", available_ids)
     if len(selected_samples) > max_samples:
         st.warning(f"Too many samples selected! Max is {max_samples}.")
         selected_samples = selected_samples[:max_samples]
     if selected_samples:
-        run_df = df_samples[df_samples["ID"].isin(selected_samples)][[
-            "ID", "BARCODE", "TYPE", "NAME/PROJECT",
-            "NREAD-QCHECK(MIN 10Q, 1000bp, NO LAMBDA)", "TOTAL_len_bp", "N50",
-            "AVEG.LEN", "MAX LEN (bp)", "Q20%", "Q30%", "BASECALL", "MODEL"]]
-        next_run_num = 50 + len(df_planned["RUN"].unique()) if "RUN" in df_planned.columns else 50
+        run_df = df_in_run[df_in_run["ID"].isin(selected_samples)]
+        next_run_num = 50 + len(df_planned["RUN"].dropna().unique()) if "RUN" in df_planned.columns else 50
         run_name = f"RUN{next_run_num:03d}"
         run_df.insert(0, "RUN", run_name)
         st.dataframe(run_df, use_container_width=True)
         if st.button("Confirm and Save Run"):
             try:
-                ws_planned.append_rows(run_df.values.tolist(), value_input_option="USER_ENTERED")
+                ws_planned.append_rows(run_df.fillna("NA").values.tolist(), value_input_option="USER_ENTERED")
                 st.success(f"Run {run_name} successfully saved.")
             except Exception as e:
                 st.error(f"Error saving run: {e}")
     else:
         st.info("Please select samples to plan a run.")
+
+st.markdown("---")
+st.header("📅 Planned Runs Overview")
+if not df_planned.empty:
+    st.dataframe(df_planned.fillna("NA"), use_container_width=True)
+else:
+    st.info("No planned run data available.")
 
 st.markdown("---")
 st.header("📤 Export Data")
@@ -139,10 +139,3 @@ st.download_button(
     file_name="samples_in_run.csv",
     mime="text/csv"
 )
-
-st.markdown("---")
-st.header("🔬 Flowcell Calculation")
-if df_flowcells.empty:
-    st.info("Flowcell calculation table is currently empty.")
-else:
-    st.dataframe(df_flowcells, use_container_width=True)
