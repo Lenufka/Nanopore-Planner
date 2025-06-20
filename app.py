@@ -38,10 +38,12 @@ df_in_run = safe_get_records(ws_in_run)
 df_flowcells = safe_get_records(ws_flowcells)
 
 st.header("📋 Sample Overview")
-projects = df_samples["Name/Project"].dropna().unique().tolist() if not df_samples.empty and "Name/Project" in df_samples.columns else []
-selected_project = st.selectbox("Filter by project", ["All"] + projects)
-if selected_project != "All" and not df_samples.empty and "Name/Project" in df_samples.columns:
-    df_samples = df_samples[df_samples["Name/Project"] == selected_project]
+
+if not df_samples.empty and "Name/Project" in df_samples.columns:
+    projects = df_samples["Name/Project"].dropna().unique().tolist()
+    selected_project = st.selectbox("Filter by Project", ["All"] + projects)
+    if selected_project != "All":
+        df_samples = df_samples[df_samples["Name/Project"] == selected_project]
 
 st.dataframe(df_samples, use_container_width=True)
 
@@ -90,16 +92,15 @@ st.markdown("---")
 st.header("🧪 Plan a New Run")
 max_samples = 24
 if not df_in_run.empty and "ID" in df_in_run.columns:
-    available_ids = df_in_run["ID"].dropna().astype(str).unique().tolist()
-    selected_samples = st.multiselect("Select up to 24 samples from 'Samples in Run'", available_ids)
+    available_ids = df_in_run["ID"].dropna().astype(str).tolist()
+    selected_samples = st.multiselect("Select up to 24 samples", available_ids)
     if len(selected_samples) > max_samples:
         st.warning(f"Too many samples selected! Max is {max_samples}.")
         selected_samples = selected_samples[:max_samples]
     if selected_samples:
         run_df = df_in_run[df_in_run["ID"].astype(str).isin(selected_samples)].copy()
-        existing_runs = df_planned["RUN"].dropna().unique().tolist() if "RUN" in df_planned.columns else []
-        run_number = 50 + len(existing_runs)
-        run_name = f"RUN{run_number:03d}"
+        next_run_num = 50 + len(df_planned["RUN"].dropna().unique()) if "RUN" in df_planned.columns else 50
+        run_name = f"RUN{next_run_num:03d}"
         run_df.insert(0, "RUN", run_name)
         st.dataframe(run_df, use_container_width=True)
         if st.button("Confirm and Save Run"):
