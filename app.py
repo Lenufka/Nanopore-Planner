@@ -19,7 +19,8 @@ def connect_to_gsheet():
     ws_samples = sheet.worksheet("NEW_single_barcode_sample_count")
     ws_planned = sheet.worksheet("PLANNED_RUNS")
     ws_in_run = sheet.worksheet("SAMPLES_IN_RUN")
-    return sheet, ws_samples, ws_planned, ws_in_run
+    ws_flowcells = sheet.worksheet("FLOWCELL_CALC")
+    return sheet, ws_samples, ws_planned, ws_in_run, ws_flowcells
 
 def safe_get_records(worksheet):
     try:
@@ -29,17 +30,28 @@ def safe_get_records(worksheet):
         st.warning(f"Could not load worksheet: {worksheet.title} – {e}")
         return pd.DataFrame()
 
-sheet, ws_samples, ws_planned, ws_in_run = connect_to_gsheet()
+sheet, ws_samples, ws_planned, ws_in_run, ws_flowcells = connect_to_gsheet()
 
 df_samples = safe_get_records(ws_samples)
 df_planned = safe_get_records(ws_planned)
 df_in_run = safe_get_records(ws_in_run)
+df_flowcells = safe_get_records(ws_flowcells)
 
 st.header("📋 Sample Overview")
-projects = df_samples["NAME/PROJECT"].dropna().unique().tolist() if not df_samples.empty and "NAME/PROJECT" in df_samples.columns else []
+projects = df_samples["Name/Project"].dropna().unique().tolist() if not df_samples.empty and "Name/Project" in df_samples.columns else []
 selected_project = st.selectbox("Filter by project", ["All"] + projects)
-if selected_project != "All" and not df_samples.empty and "NAME/PROJECT" in df_samples.columns:
-    df_samples = df_samples[df_samples["NAME/PROJECT"] == selected_project]
+if selected_project != "All" and not df_samples.empty and "Name/Project" in df_samples.columns:
+    df_samples = df_samples[df_samples["Name/Project"] == selected_project]
+
+# Interactive filtering for df_samples
+if not df_samples.empty:
+    with st.expander("🔍 Advanced Filter Options"):
+        cols_to_filter = st.multiselect("Select columns to filter", df_samples.columns.tolist())
+        for col in cols_to_filter:
+            options = df_samples[col].dropna().unique().tolist()
+            selected_values = st.multiselect(f"Filter by {col}", options, default=options)
+            df_samples = df_samples[df_samples[col].isin(selected_values)]
+
 st.dataframe(df_samples, use_container_width=True)
 
 # Convert numeric columns
@@ -52,8 +64,8 @@ for col in numeric_cols:
 
 st.markdown("---")
 st.header("📈 Project Statistics")
-if not df_samples.empty and "NAME/PROJECT" in df_samples.columns:
-    summary = df_samples.groupby("NAME/PROJECT").agg({
+if not df_samples.empty and "Name/Project" in df_samples.columns:
+    summary = df_samples.groupby("Name/Project").agg({
         "NREAD-QCHECK(MIN 10Q, 1000bp, NO LAMBDA)": "sum",
         "TOTAL_len_bp": "sum",
         "N50": "mean",
@@ -139,3 +151,8 @@ st.download_button(
     file_name="samples_in_run.csv",
     mime="text/csv"
 )
+
+if not df_flowcells.empty:
+    st.markdown("---")
+    st.header("🧮 Flowcell Calculation Overview")
+    st.dataframe(df_flowcells.fillna("NA"), use_container_width=True)
