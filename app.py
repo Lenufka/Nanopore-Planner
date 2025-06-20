@@ -24,6 +24,9 @@ def connect_to_gsheet():
 
 def safe_get_records(worksheet):
     try:
+        headers = worksheet.row_values(1)
+        if "" in headers or len(headers) != len(set(headers)):
+            raise ValueError(f"The header row in the worksheet contains duplicates or empty values: {headers}")
         data = worksheet.get_all_records()
         return pd.DataFrame(data)
     except Exception as e:
